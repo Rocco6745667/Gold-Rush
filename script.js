@@ -11,11 +11,19 @@ let level = 0;
 let levels = [];
 let gravity = 0.6;
 let gameState = "title";
-let lives = 3;
+let lives = 30;
 let highScore = 0;
 let score = 0;
 let powerups = [];
 let activePowerups = [];
+let pauseButton = {
+  x: 720,
+  y: 20,
+  width: 60,
+  height: 30,
+};
+let flashValue = 0;
+let flashDirection = 1;
 
 function setup() {
   createCanvas(800, 595);
@@ -150,7 +158,9 @@ function setup() {
       ],
       powerups: [
         { x: 200, y: 300, type: "invincibility" },
+        { x: 100, y: 300, type: "invincibility" },
         { x: 500, y: 200, type: "speed" },
+        { x: 400, y: 300, type: "gun" },
       ],
       boss: {
         x: 400,
@@ -161,7 +171,7 @@ function setup() {
         attackCooldown: 120,
         attackTimer: 0,
         projectiles: [],
-        attackPattern: 0
+        attackPattern: 0,
       },
     },
   ];
@@ -177,6 +187,7 @@ class Powerup {
     this.type = type;
     this.active = false;
     this.duration = 5000;
+    this.duration = this.type === "invincibility" ? 10000 : 5000;
   }
 
   show() {
@@ -208,6 +219,11 @@ class Player {
     this.velocityY = 0;
     this.onGround = false;
     this.isInvincible = false;
+    this.hasGun = false;
+    this.bullets = [];
+    this.bulletSpeed = 8;
+    this.shootCooldown = 20;
+    this.shootTimer = 0;
   }
 
   update() {
@@ -241,6 +257,21 @@ class Player {
         this.onGround = true;
       }
     }
+
+    if (this.shootTimer > 0) {
+      this.shootTimer--;
+    }
+
+    // Update bullets
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      let bullet = this.bullets[i];
+      bullet.x += this.bulletSpeed * bullet.dir;
+
+      // Remove bullets that are off screen
+      if (bullet.x < 0 || bullet.x > width) {
+        this.bullets.splice(i, 1);
+      }
+    }
   }
 
   applyPowerup(powerup) {
@@ -253,6 +284,9 @@ class Player {
         break;
       case "invincibility":
         this.isInvincible = true;
+        break;
+      case "gun":
+        fill(255, 69, 0); // Bright orange-red for gun powerup
         break;
     }
 
@@ -274,6 +308,10 @@ class Player {
         break;
       case "invincibility":
         this.isInvincible = false;
+        break;
+      case "gun":
+        this.hasGun = false;
+        this.bullets = [];
         break;
     }
 
@@ -314,6 +352,25 @@ class Player {
       fill(255, 215, 0); // Gold color when invincible
     }
     rect(this.x, this.y, this.width, this.height);
+
+    if (this.hasGun) {
+      // Draw bullets
+      fill(255, 255, 0);
+      for (let bullet of this.bullets) {
+        ellipse(bullet.x, bullet.y, 8, 8);
+      }
+    }
+  }
+
+  shoot() {
+    if (this.hasGun && this.shootTimer <= 0) {
+      this.bullets.push({
+        x: this.x + this.width / 2,
+        y: this.y + this.height / 2,
+        dir: keyIsDown(LEFT_ARROW) ? -1 : 1,
+      });
+      this.shootTimer = this.shootCooldown;
+    }
   }
 }
 
@@ -441,8 +498,11 @@ function playGame() {
       enemy.update();
       enemy.show();
 
-      if (player.hitsEnemy(enemy) && !player.isInvincible) {
-        if (player.y + player.height <= enemy.y + 5 && player.velocityY > 0) {
+      if (player.hitsEnemy(enemy)) {
+        if (
+          player.isInvincible ||
+          (player.y + player.height <= enemy.y + 5 && player.velocityY > 0)
+        ) {
           score += 100;
           enemies.splice(i, 1);
           player.velocityY = -player.jumpStrength / 1.5;
@@ -492,94 +552,136 @@ function playGame() {
 
   // Boss level logic (Level 3)
   if (level === 3) {
-      let boss = levels[level].boss;
+    let boss = levels[level].boss;
 
-      // Boss movement patterns
-      boss.attackTimer++;
-      if (boss.attackTimer >= boss.attackCooldown) {
-          boss.attackTimer = 0;
-          boss.attackPattern = (boss.attackPattern + 1) % 3;
+    // Boss movement patterns
+    boss.attackTimer++;
+    if (boss.attackTimer >= boss.attackCooldown) {
+      boss.attackTimer = 0;
+      boss.attackPattern = (boss.attackPattern + 1) % 3;
 
-          // Add projectile attack
-          boss.projectiles.push(new BossProjectile(boss.x + boss.size/2, boss.y + boss.size/2, player.x, player.y));
+      // Add projectile attack
+      boss.projectiles.push(
+        new BossProjectile(
+          boss.x + boss.size / 2,
+          boss.y + boss.size / 2,
+          player.x,
+          player.y
+        )
+      );
+    }
+
+    // Different movement patterns
+    switch (boss.attackPattern) {
+      case 0: // Horizontal movement
+        boss.x += boss.speed;
+        if (boss.x < 0 || boss.x > width - boss.size) boss.speed *= -1;
+        break;
+      case 1: // Diagonal movement
+        boss.x += boss.speed;
+        boss.y += sin(frameCount * 0.05) * 3;
+        if (boss.x < 0 || boss.x > width - boss.size) boss.speed *= -1;
+        break;
+      case 2: // Chase player
+        let dx = player.x - boss.x;
+        boss.x += dx * 0.02;
+        break;
+    }
+
+    // Update and show projectiles
+    for (let i = boss.projectiles.length - 1; i >= 0; i--) {
+      let proj = boss.projectiles[i];
+      proj.update();
+      proj.show();
+
+      // Check projectile collision with player
+      if (
+        !player.isInvincible &&
+        dist(
+          proj.x,
+          proj.y,
+          player.x + player.width / 2,
+          player.y + player.height / 2
+        ) <
+          proj.size + player.width / 2
+      ) {
+        lives--;
+        boss.projectiles.splice(i, 1);
+        if (lives <= 0) {
+          gameState = "gameOver";
+          saveHighScore();
+        } else {
+          loadLevel();
+        }
       }
 
-      // Different movement patterns
-      switch(boss.attackPattern) {
-          case 0: // Horizontal movement
-              boss.x += boss.speed;
-              if (boss.x < 0 || boss.x > width - boss.size) boss.speed *= -1;
-              break;
-          case 1: // Diagonal movement
-              boss.x += boss.speed;
-              boss.y += sin(frameCount * 0.05) * 3;
-              if (boss.x < 0 || boss.x > width - boss.size) boss.speed *= -1;
-              break;
-          case 2: // Chase player
-              let dx = player.x - boss.x;
-              boss.x += dx * 0.02;
-              break;
+      // Remove projectiles that are off screen
+      if (proj.x < 0 || proj.x > width || proj.y < 0 || proj.y > height) {
+        boss.projectiles.splice(i, 1);
       }
+    }
 
-      // Update and show projectiles
-      for (let i = boss.projectiles.length - 1; i >= 0; i--) {
-          let proj = boss.projectiles[i];
-          proj.update();
-          proj.show();
+    // Visual feedback for boss health
+    fill(128, 0, 128);
+    rect(boss.x, boss.y, boss.size, boss.size);
 
-          // Check projectile collision with player
-          if (!player.isInvincible && 
-              dist(proj.x, proj.y, player.x + player.width/2, player.y + player.height/2) < proj.size + player.width/2) {
-              lives--;
-              boss.projectiles.splice(i, 1);
-              if (lives <= 0) {
-                  gameState = "gameOver";
-                  saveHighScore();
-              } else {
-                  loadLevel();
-              }
-          }
+    // Health bar
+    fill(255, 0, 0);
+    rect(boss.x, boss.y - 20, boss.size * (boss.health / 5), 10);
 
-          // Remove projectiles that are off screen
-          if (proj.x < 0 || proj.x > width || proj.y < 0 || proj.y > height) {
-              boss.projectiles.splice(i, 1);
-          }
+    // Boss collision check
+    if (
+      player.x < boss.x + boss.size &&
+      player.x + player.width > boss.x &&
+      player.y < boss.y + boss.size &&
+      player.y + player.height > boss.y
+    ) {
+      if (player.y + player.height <= boss.y + 10 && player.velocityY > 0) {
+        boss.health--;
+        score += 200;
+        player.velocityY = -player.jumpStrength / 1.5;
+
+        // Visual feedback for successful hit
+        fill(255, 255, 0, 150);
+        rect(0, 0, width, height);
+
+        if (boss.health <= 0) {
+          gameState = "win";
+          saveHighScore();
+        }
+      } else if (!player.isInvincible) {
+        lives--;
+        if (lives <= 0) {
+          gameState = "gameOver";
+          saveHighScore();
+        } else {
+          loadLevel();
+        }
       }
+    }
+  }
 
-      // Visual feedback for boss health
-      fill(128, 0, 128);
-      rect(boss.x, boss.y, boss.size, boss.size);
+  //for gun powerup
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    let enemy = enemies[i];
 
-      // Health bar
-      fill(255, 0, 0);
-      rect(boss.x, boss.y - 20, boss.size * (boss.health/5), 10);
-
-      // Boss collision check
-      if (player.x < boss.x + boss.size && player.x + player.width > boss.x &&
-          player.y < boss.y + boss.size && player.y + player.height > boss.y) {
-          if (player.y + player.height <= boss.y + 10 && player.velocityY > 0) {
-              boss.health--;
-              score += 200;
-              player.velocityY = -player.jumpStrength/1.5;
-
-              // Visual feedback for successful hit
-              fill(255, 255, 0, 150);
-              rect(0, 0, width, height);
-
-              if (boss.health <= 0) {
-                  gameState = "win";
-                  saveHighScore();
-              }
-          } else if (!player.isInvincible) {
-              lives--;
-              if (lives <= 0) {
-                  gameState = "gameOver";
-                  saveHighScore();
-              } else {
-                  loadLevel();
-              }
-          }
+    // Check bullet collisions
+    if (player.hasGun) {
+      for (let j = player.bullets.length - 1; j >= 0; j--) {
+        let bullet = player.bullets[j];
+        if (
+          bullet.x > enemy.x &&
+          bullet.x < enemy.x + enemy.size &&
+          bullet.y > enemy.y &&
+          bullet.y < enemy.y + enemy.size
+        ) {
+          enemies.splice(i, 1);
+          player.bullets.splice(j, 1);
+          score += 100;
+          break;
+        }
       }
+    }
   }
 
   if (player.y > height) {
@@ -631,23 +733,22 @@ function drawHUD() {
   fill(0, 0, 0, 180);
   noStroke();
   rect(0, 0, 200, 120); // Made panel slightly taller
-  
+
   textAlign(LEFT);
   textSize(20);
-  
+
   fill(255, 50, 50);
   text("♥ " + lives, 20, 30);
-  
+
   fill(255, 215, 0);
   text("★ " + score, 20, 55);
-  
+
   fill(255, 140, 0);
   text("🏆 " + highScore, 20, 80);
-  
+
   fill(100, 255, 255);
   text("Level " + (level + 1), 120, 30);
 
- 
   fill(255, 223, 0);
   text("🪙 " + coins.length, 120, 55);
 
@@ -658,8 +759,18 @@ function drawHUD() {
     text(powerup.type.toUpperCase(), 20, powerupY);
     powerupY += 25;
   }
-}
 
+  fill(0, 0, 0, 180);
+  rect(pauseButton.x, pauseButton.y, pauseButton.width, pauseButton.height);
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(16);
+  text(
+    "PAUSE",
+    pauseButton.x + pauseButton.width / 2,
+    pauseButton.y + pauseButton.height / 2
+  );
+}
 
 function keyPressed() {
   if (key === " " || keyCode === UP_ARROW) {
@@ -683,11 +794,29 @@ function keyPressed() {
       gameState = "playing";
     }
   }
+
+  if (key === "t" || key === "T") {
+    player.shoot();
+  }
+}
+
+// function to handle mouse clicks
+function mouseClicked() {
+  if (gameState === "playing" || gameState === "paused") {
+    if (
+      mouseX > pauseButton.x &&
+      mouseX < pauseButton.x + pauseButton.width &&
+      mouseY > pauseButton.y &&
+      mouseY < pauseButton.y + pauseButton.height
+    ) {
+      gameState = gameState === "playing" ? "paused" : "playing";
+    }
+  }
 }
 
 function resetGame() {
   gameState = "title";
-  lives = 3;
+  lives = 30;
   score = 0;
   level = 0;
   levels[3].boss.health = 5;
@@ -700,10 +829,30 @@ function saveHighScore() {
 }
 
 function showTitleScreen() {
+  background(255, 223, 0); // Yellow background
+
+  // Flash effect
+  flashValue += flashDirection * 5;
+  if (flashValue > 255 || flashValue < 0) {
+    flashDirection *= -1;
+  }
+
   textAlign(CENTER);
+  textStyle(BOLD);
+
+  // Main title with shadow effect
+  fill(0, 0, 0, 50);
+  textSize(52);
+  text("GOLD RUSH", width / 2 + 3, height / 3 + 3);
+
+  // Flashing main title
+  fill(139, 69, 19, flashValue); // Brown color with flash effect
+  textSize(52);
+  text("GOLD RUSH", width / 2, height / 3);
+
+  // Subtitle
   fill(0);
-  textSize(32);
-  text("Platformer Game", width / 2, height / 3);
+  textStyle(NORMAL);
   textSize(24);
   text("Press ENTER to Start", width / 2, height / 2);
 }
