@@ -24,10 +24,16 @@ let pauseButton = {
 };
 let flashValue = 0;
 let flashDirection = 1;
+let gameOverAngle = 0;
+let particleSystem = [];
+let tumbleweed;
+let dustParticles = [];
+let finalTreasure = null;
 
 function setup() {
   createCanvas(800, 595);
   player = new Player();
+  tumbleweed = { x: -50, y: height - 50 };
   highScore = localStorage.getItem("highScore")
     ? int(localStorage.getItem("highScore"))
     : 0;
@@ -444,7 +450,7 @@ class BossProjectile {
 }
 
 function draw() {
-  background(135, 206, 235);
+  background(255, 87, 51);
 
   if (gameState === "title") {
     showTitleScreen();
@@ -478,7 +484,6 @@ function playGame() {
     let powerup = powerups[i];
     if (!powerup.active) {
       powerup.show();
-
       if (
         player.x < powerup.x + powerup.size &&
         player.x + player.width > powerup.x &&
@@ -511,9 +516,6 @@ function playGame() {
             level++;
             if (level < levels.length) {
               loadLevel();
-            } else {
-              gameState = "win";
-              saveHighScore();
             }
           }
         } else {
@@ -529,7 +531,7 @@ function playGame() {
     }
   }
 
-  // Handle coins and boss level
+  // Handle coins
   for (let i = coins.length - 1; i >= 0; i--) {
     let coin = coins[i];
     coin.show();
@@ -538,13 +540,10 @@ function playGame() {
       coins.splice(i, 1);
       score += 50;
 
-      if (coins.length === 0) {
+      if (coins.length === 0 && level < 3) {
         level++;
         if (level < levels.length) {
           loadLevel();
-        } else {
-          gameState = "win";
-          saveHighScore();
         }
       }
     }
@@ -559,8 +558,6 @@ function playGame() {
     if (boss.attackTimer >= boss.attackCooldown) {
       boss.attackTimer = 0;
       boss.attackPattern = (boss.attackPattern + 1) % 3;
-
-      // Add projectile attack
       boss.projectiles.push(
         new BossProjectile(
           boss.x + boss.size / 2,
@@ -646,8 +643,13 @@ function playGame() {
         rect(0, 0, width, height);
 
         if (boss.health <= 0) {
-          gameState = "win";
-          saveHighScore();
+          finalTreasure = {
+            x: boss.x,
+            y: boss.y,
+            size: 40,
+            collected: false,
+            angle: 0,
+          };
         }
       } else if (!player.isInvincible) {
         lives--;
@@ -661,26 +663,31 @@ function playGame() {
     }
   }
 
-  //for gun powerup
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    let enemy = enemies[i];
+  // Handle final treasure
+  if (finalTreasure && !finalTreasure.collected) {
+    push();
+    translate(
+      finalTreasure.x + finalTreasure.size / 2,
+      finalTreasure.y + finalTreasure.size / 2
+    );
+    finalTreasure.angle += 0.05;
+    rotate(finalTreasure.angle);
+    textSize(40);
+    text("💎", -20, 20);
+    pop();
 
-    // Check bullet collisions
-    if (player.hasGun) {
-      for (let j = player.bullets.length - 1; j >= 0; j--) {
-        let bullet = player.bullets[j];
-        if (
-          bullet.x > enemy.x &&
-          bullet.x < enemy.x + enemy.size &&
-          bullet.y > enemy.y &&
-          bullet.y < enemy.y + enemy.size
-        ) {
-          enemies.splice(i, 1);
-          player.bullets.splice(j, 1);
-          score += 100;
-          break;
-        }
-      }
+    if (
+      player.x < finalTreasure.x + finalTreasure.size &&
+      player.x + player.width > finalTreasure.x &&
+      player.y < finalTreasure.y + finalTreasure.size &&
+      player.y + player.height > finalTreasure.y
+    ) {
+      finalTreasure.collected = true;
+      score += 1000;
+      setTimeout(() => {
+        gameState = "win";
+        saveHighScore();
+      }, 500);
     }
   }
 
@@ -760,16 +767,14 @@ function drawHUD() {
     powerupY += 25;
   }
 
+  // Draw pause button with pause symbol
   fill(0, 0, 0, 180);
   rect(pauseButton.x, pauseButton.y, pauseButton.width, pauseButton.height);
+
+  // Draw pause symbol (two white rectangles)
   fill(255);
-  textAlign(CENTER, CENTER);
-  textSize(16);
-  text(
-    "PAUSE",
-    pauseButton.x + pauseButton.width / 2,
-    pauseButton.y + pauseButton.height / 2
-  );
+  rect(pauseButton.x + 20, pauseButton.y + 5, 6, 20);
+  rect(pauseButton.x + 34, pauseButton.y + 5, 6, 20);
 }
 
 function keyPressed() {
@@ -798,6 +803,11 @@ function keyPressed() {
   if (key === "t" || key === "T") {
     player.shoot();
   }
+
+  if ((key === "r" || key === "R") && gameState === "paused") {
+    resetGame();
+    gameState = "playing";
+  }
 }
 
 // function to handle mouse clicks
@@ -810,6 +820,27 @@ function mouseClicked() {
       mouseY < pauseButton.y + pauseButton.height
     ) {
       gameState = gameState === "playing" ? "paused" : "playing";
+    }
+  }
+  if (gameState === "paused") {
+    // Check for resume button click
+    if (
+      mouseX > width / 2 - 100 &&
+      mouseX < width / 2 + 100 &&
+      mouseY > height / 2 - 20 &&
+      mouseY < height / 2 + 20
+    ) {
+      gameState = "playing";
+    }
+    // Check for restart button click
+    if (
+      mouseX > width / 2 - 100 &&
+      mouseX < width / 2 + 100 &&
+      mouseY > height / 2 + 40 &&
+      mouseY < height / 2 + 80
+    ) {
+      resetGame();
+      gameState = "playing";
     }
   }
 }
@@ -858,48 +889,244 @@ function showTitleScreen() {
 }
 
 function showInstructions() {
+  background(255, 223, 0); // Matching yellow background
+
+  // Rotating coin effect at the top
+  push();
+  translate(width / 2, 100);
+  rotate(frameCount * 0.05);
+  textSize(60);
+  text("🪙", 0, 0);
+  pop();
+
+  // Main instructions with visual flair
   textAlign(CENTER);
-  fill(0);
+  fill(139, 69, 19); // Rich brown color
+  textSize(36);
+  text("HOW TO PLAY", width / 2, 180);
+
+  // Instructions with icons
   textSize(24);
-  text("Instructions:", width / 2, height / 3);
-  textSize(18);
-  text("Use LEFT and RIGHT arrows to move", width / 2, height / 2 - 40);
-  text("Press SPACE or UP arrow to jump", width / 2, height / 2 - 10);
-  text("Collect coins and powerups", width / 2, height / 2 + 20);
-  text("Avoid or jump on enemies", width / 2, height / 2 + 50);
-  text("Press P to Pause/Resume", width / 2, height / 2 + 80);
-  text("Press ENTER to Start", width / 2, height / 2 + 120);
+  fill(0);
+  text("🏃 LEFT/RIGHT Arrows to Move", width / 2, height / 2 - 80);
+  text("⬆️ SPACE/UP to Jump", width / 2, height / 2 - 40);
+  text("💰 Collect Gold for Points", width / 2, height / 2);
+  text("⚡ Grab Power-ups for Abilities", width / 2, height / 2 + 40);
+  text("💀 Jump on Enemies to Defeat Them", width / 2, height / 2 + 80);
+  text("⏸️ Press P to Pause", width / 2, height / 2 + 120);
+
+  // Pulsing start prompt
+  let pulseValue = sin(frameCount * 0.05) * 127 + 128;
+  fill(139, 69, 19, pulseValue);
+  textSize(28);
+  text("Press ENTER to Start Your Adventure!", width / 2, height - 100);
 }
 
 function showGameOverScreen() {
-  background(0);
+  // Dark gradient background
+  let c1 = color(40, 0, 0);
+  let c2 = color(0, 0, 0);
+  for (let y = 0; y < height; y++) {
+    let inter = map(y, 0, height, 0, 1);
+    let c = lerpColor(c1, c2, inter);
+    stroke(c);
+    line(0, y, width, y);
+  }
+
+  // Rotating skull emoji
+  gameOverAngle += 0.02;
+  push();
+  translate(width / 2, height / 3 - 40);
+  rotate(gameOverAngle);
+  textSize(60);
+  text("💀", 0, 0);
+  pop();
+
+  // Game Over text with glow effect
   textAlign(CENTER);
-  fill(255);
+  textSize(48);
+
+  // Glow effect
+  fill(255, 0, 0, 50);
+  text("GAME OVER", width / 2 + 4, height / 3 + 4);
+  text("GAME OVER", width / 2 - 4, height / 3 - 4);
+
+  fill(255, 0, 0);
+  text("GAME OVER", width / 2, height / 3);
+
+  // Score display with golden color
+  fill(255, 215, 0);
   textSize(32);
-  text("Game Over", width / 2, height / 3);
+  text(`Final Score: ${score}`, width / 2, height / 2);
+  text(`High Score: ${highScore}`, width / 2, height / 2 + 50);
+
+  // Pulsing restart text
+  let pulseValue = sin(frameCount * 0.05) * 127 + 128;
+  fill(255, pulseValue);
   textSize(24);
-  text(`Your Score: ${score}`, width / 2, height / 2 - 20);
-  text(`High Score: ${highScore}`, width / 2, height / 2 + 20);
-  text("Press ENTER to Restart", width / 2, height / 2 + 80);
+  text("Press ENTER to Try Again", width / 2, height - 100);
+
+  // Add particles
+  if (frameCount % 10 === 0) {
+    particleSystem.push({
+      x: random(width),
+      y: height + 10,
+      speed: random(2, 5),
+      size: random(3, 8),
+    });
+  }
+
+  // Update and display particles
+  for (let i = particleSystem.length - 1; i >= 0; i--) {
+    let p = particleSystem[i];
+    p.y -= p.speed;
+    fill(255, 0, 0, 150);
+    noStroke();
+    ellipse(p.x, p.y, p.size);
+
+    if (p.y < -10) {
+      particleSystem.splice(i, 1);
+    }
+  }
 }
 
 function showWinScreen() {
-  background(0, 153, 0);
+  // Desert sunset gradient background
+  let c1 = color(255, 140, 0); // Orange sky
+  let c2 = color(139, 69, 19); // Brown ground
+  for (let y = 0; y < height; y++) {
+    let inter = map(y, 0, height, 0, 1);
+    let c = lerpColor(c1, c2, inter);
+    stroke(c);
+    line(0, y, width, y);
+  }
+
+  // Rolling tumbleweed
+  tumbleweed.x += 3;
+  if (tumbleweed.x > width + 50) tumbleweed.x = -50;
+  push();
+  translate(tumbleweed.x, tumbleweed.y);
+  rotate(frameCount * 0.1);
+  textSize(40);
+  text("🌵", 0, 0);
+  pop();
+
+  // Generate dust particles
+  if (frameCount % 5 === 0) {
+    dustParticles.push({
+      x: random(width),
+      y: height - 20,
+      size: random(3, 8),
+      speedX: random(1, 3),
+      speedY: random(-0.5, -2),
+      life: 255,
+    });
+  }
+
+  // Update and show dust particles
+  for (let i = dustParticles.length - 1; i >= 0; i--) {
+    let p = dustParticles[i];
+    p.x += p.speedX;
+    p.y += p.speedY;
+    p.life -= 2;
+    fill(210, 180, 140, p.life);
+    noStroke();
+    ellipse(p.x, p.y, p.size);
+
+    if (p.life <= 0) dustParticles.splice(i, 1);
+  }
+
+  // Main victory text with western font style
   textAlign(CENTER);
+  textSize(60);
+
+  // Text shadow
+  fill(139, 69, 19);
+  text("YEEHAW!", width / 2 + 4, height / 3 + 4);
+
+  // Main text with gold color
+  fill(255, 215, 0);
+  text("YEEHAW!", width / 2, height / 3);
+
+  // Score display in wanted poster style
+  drawWantedPoster();
+
+  // Bouncing replay text
+  let bounceY = sin(frameCount * 0.1) * 10;
   fill(255);
-  textSize(32);
-  text("Congratulations! You Beat the Game!", width / 2, height / 3);
   textSize(24);
-  text(`Final Score: ${score}`, width / 2, height / 2 - 20);
-  text(`High Score: ${highScore}`, width / 2, height / 2 + 20);
-  text("Press ENTER to Play Again", width / 2, height / 2 + 80);
+  text("Press ENTER to Ride Again, Partner!", width / 2, height - 80 + bounceY);
+}
+
+function drawWantedPoster() {
+  // Wanted poster background
+  fill(255, 233, 175);
+  rect(width / 2 - 150, height / 2, 300, 200);
+
+  // Poster border
+  stroke(139, 69, 19);
+  strokeWeight(3);
+  rect(width / 2 - 145, height / 2 + 5, 290, 190);
+
+  // Poster text
+  noStroke();
+  fill(139, 69, 19);
+  textSize(32);
+  text("REWARD", width / 2, height / 2 + 40);
+
+  textSize(28);
+  text(`${score} GOLD`, width / 2, height / 2 + 100);
+
+  textSize(24);
+  text(`High Score: ${highScore}`, width / 2, height / 2 + 150);
 }
 
 function showPauseMenu() {
+  // Semi-transparent dark overlay
+  fill(0, 0, 0, 150);
+  rect(0, 0, width, height);
+
+  // Centered menu box
+  fill(255, 233, 175);
+  stroke(139, 69, 19);
+  strokeWeight(4);
+  rect(width / 2 - 200, height / 2 - 150, 400, 300);
+
+  // Menu title
   textAlign(CENTER);
-  fill(0);
-  textSize(32);
-  text("Paused", width / 2, height / 2);
+  noStroke();
+  fill(139, 69, 19);
+  textSize(48);
+  text("PAUSED", width / 2, height / 2 - 80);
+
+  // Menu options with hover effects
   textSize(24);
-  text("Press P to Resume", width / 2, height / 2 + 40);
+
+  // Resume button
+  if (
+    mouseX > width / 2 - 100 &&
+    mouseX < width / 2 + 100 &&
+    mouseY > height / 2 - 20 &&
+    mouseY < height / 2 + 20
+  ) {
+    fill(255, 140, 0);
+    text("Resume (P)", width / 2, height / 2);
+  } else {
+    fill(139, 69, 19);
+    text("Resume (P)", width / 2, height / 2);
+  }
+
+  // Restart button
+  if (
+    mouseX > width / 2 - 100 &&
+    mouseX < width / 2 + 100 &&
+    mouseY > height / 2 + 40 &&
+    mouseY < height / 2 + 80
+  ) {
+    fill(255, 140, 0);
+    text("Restart (R)", width / 2, height / 2 + 60);
+  } else {
+    fill(139, 69, 19);
+    text("Restart (R)", width / 2, height / 2 + 60);
+  }
 }
