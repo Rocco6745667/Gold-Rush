@@ -225,7 +225,7 @@ class Powerup {
   constructor(x, y, type) {
     this.x = x;
     this.y = y;
-    this.size = 20;
+    this.size = 30;
     this.type = type;
     this.active = false;
     this.duration = 5000;
@@ -233,18 +233,23 @@ class Powerup {
   }
 
   show() {
+    push();
+    textSize(this.size);
+    textAlign(CENTER, CENTER);
+    noStroke();
+    noFill();
     switch (this.type) {
       case "speed":
-        fill(0, 191, 255);
+        text("⚡", this.x, this.y);
         break;
       case "jump":
-        fill(147, 112, 219);
+        text("🦘", this.x, this.y);
         break;
       case "invincibility":
-        fill(255, 215, 0);
+        text("⭐", this.x, this.y);
         break;
     }
-    rect(this.x, this.y, this.size, this.size);
+    pop();
   }
 }
 
@@ -426,7 +431,7 @@ class Platform {
   }
 
   show() {
-    fill(0, 255, 0);
+    fill(87, 67, 29);
     rect(this.x, this.y, this.width, this.height);
   }
 }
