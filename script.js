@@ -30,6 +30,41 @@ let tumbleweed;
 let dustParticles = [];
 let finalTreasure = null;
 
+// Sound effects
+let jumpSound;
+let coinSound;
+let enemyHitSound;
+let bossAttackSound;
+let playerHitSound;
+let powerupSound;
+let victorySound;
+let gameOverSound;
+let treasureSound;
+
+// Music tracks
+let titleMusic;
+let gameMusic;
+let bossMusic;
+
+function preload() {
+  // Load sound effects
+  soundFormats("mp3", "wav");
+  jumpSound = loadSound("sounds/jump.mp3");
+  coinSound = loadSound("sounds/coin.mp3");
+  enemyHitSound = loadSound("sounds/enemyHit.mp3");
+  bossAttackSound = loadSound("sounds/bossAttack.mp3");
+  playerHitSound = loadSound("sounds/playerHit.mp3");
+  powerupSound = loadSound("sounds/powerup.mp3");
+  victorySound = loadSound("sounds/victory.mp3");
+  gameOverSound = loadSound("sounds/gameOver.mp3");
+  treasureSound = loadSound("sounds/treasure.mp3");
+
+  // Load music tracks
+  titleMusic = loadSound("sounds/titleTheme.mp3");
+  gameMusic = loadSound("sounds/gameTheme.mp3");
+  bossMusic = loadSound("sounds/bossTheme.mp3");
+}
+
 function setup() {
   createCanvas(800, 595);
   player = new Player();
@@ -331,6 +366,7 @@ class Player {
     if (this.onGround) {
       this.velocityY = -this.jumpStrength;
       this.onGround = false;
+      jumpSound.play();
     }
   }
 
@@ -469,6 +505,49 @@ function draw() {
   if (gameState === "playing" || gameState === "paused") {
     drawHUD();
   }
+  switch (gameState) {
+    case "title":
+      if (!titleMusic.isPlaying()) {
+        gameMusic.stop();
+        bossMusic.stop();
+        titleMusic.play();
+        titleMusic.setLoop(true);
+      }
+      break;
+    case "playing":
+      if (level < 3) {
+        if (!gameMusic.isPlaying()) {
+          titleMusic.stop();
+          bossMusic.stop();
+          gameMusic.play();
+          gameMusic.setLoop(true);
+        }
+      } else {
+        if (!bossMusic.isPlaying()) {
+          titleMusic.stop();
+          gameMusic.stop();
+          bossMusic.play();
+          bossMusic.setLoop(true);
+        }
+      }
+      break;
+    case "gameOver":
+      titleMusic.stop();
+      gameMusic.stop();
+      bossMusic.stop();
+      if (!gameOverSound.isPlaying()) {
+        gameOverSound.play();
+      }
+      break;
+    case "win":
+      titleMusic.stop();
+      gameMusic.stop();
+      bossMusic.stop();
+      if (!victorySound.isPlaying()) {
+        victorySound.play();
+      }
+      break;
+  }
 }
 
 function playGame() {
@@ -504,6 +583,7 @@ function playGame() {
       enemy.show();
 
       if (player.hitsEnemy(enemy)) {
+        enemyHitSound.play();
         if (
           player.isInvincible ||
           (player.y + player.height <= enemy.y + 5 && player.velocityY > 0)
@@ -539,6 +619,7 @@ function playGame() {
     if (player.collectsCoin(coin)) {
       coins.splice(i, 1);
       score += 50;
+      coinSound.play();
 
       if (coins.length === 0 && level < 3) {
         level++;
@@ -556,6 +637,7 @@ function playGame() {
     // Boss movement patterns
     boss.attackTimer++;
     if (boss.attackTimer >= boss.attackCooldown) {
+      bossAttackSound.play();
       boss.attackTimer = 0;
       boss.attackPattern = (boss.attackPattern + 1) % 3;
       boss.projectiles.push(
