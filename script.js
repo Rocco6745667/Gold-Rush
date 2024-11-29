@@ -46,6 +46,7 @@ let titleMusic;
 let gameMusic;
 let bossMusic;
 
+/*
 function preload() {
   // Load sound effects
   soundFormats("mp3", "wav");
@@ -64,7 +65,7 @@ function preload() {
   gameMusic = loadSound("sounds/gameTheme.mp3");
   bossMusic = loadSound("sounds/bossTheme.mp3");
 }
-
+*/
 function setup() {
   createCanvas(800, 595);
   player = new Player();
@@ -366,7 +367,7 @@ class Player {
     if (this.onGround) {
       this.velocityY = -this.jumpStrength;
       this.onGround = false;
-      jumpSound.play();
+      //jumpSound.play();
     }
   }
 
@@ -505,6 +506,7 @@ function draw() {
   if (gameState === "playing" || gameState === "paused") {
     drawHUD();
   }
+
   switch (gameState) {
     case "title":
       if (!titleMusic.isPlaying()) {
@@ -755,7 +757,7 @@ function playGame() {
     finalTreasure.angle += 0.05;
     rotate(finalTreasure.angle);
     textSize(40);
-    text("💎", -20, 20);
+    text("💰", -20, 20);
     pop();
 
     if (
