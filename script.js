@@ -51,6 +51,7 @@ let levelBackground;
 let playerImage;
 let enemyImage;
 let bossImage;
+let soundsReady = false;
 
 function preload() {
   // Load sound effects
@@ -75,6 +76,11 @@ function preload() {
 function setup() {
   createCanvas(800, 595);
   player = new Player();
+
+  userStartAudio().then(() => {
+    soundsReady = true;
+  });
+
   tumbleweed = { x: -50, y: height - 50 };
   highScore = localStorage.getItem("highScore")
     ? int(localStorage.getItem("highScore"))
@@ -515,6 +521,15 @@ function draw() {
   if (gameState === "playing" || gameState === "paused") {
     drawHUD();
   }
+
+  if (!soundsReady) {
+    background(0);
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(24);
+    text("Click anywhere to start game with sound", width / 2, height / 2);
+    return;
+  }
   /*
   switch (gameState) {
     case "title":
@@ -909,6 +924,11 @@ function keyPressed() {
 
 // function to handle mouse clicks
 function mouseClicked() {
+  if (!soundsReady) {
+    userStartAudio();
+    soundsReady = true;
+  }
+
   if (gameState === "playing" || gameState === "paused") {
     if (
       mouseX > pauseButton.x &&
