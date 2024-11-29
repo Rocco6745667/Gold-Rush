@@ -2,6 +2,7 @@
 //218008847
 //11/30/2024
 // DATT 2400: Final project
+//Gold Rush
 
 let player;
 let platforms = [];
@@ -11,7 +12,7 @@ let level = 0;
 let levels = [];
 let gravity = 0.6;
 let gameState = "title";
-let lives = 30;
+let lives = 3;
 let highScore = 0;
 let score = 0;
 let powerups = [];
@@ -46,7 +47,11 @@ let titleMusic;
 let gameMusic;
 let bossMusic;
 
-/*
+let levelBackground;
+let playerImage;
+let enemyImage;
+let bossImage;
+
 function preload() {
   // Load sound effects
   soundFormats("mp3", "wav");
@@ -64,8 +69,9 @@ function preload() {
   titleMusic = loadSound("sounds/titleTheme.mp3");
   gameMusic = loadSound("sounds/gameTheme.mp3");
   bossMusic = loadSound("sounds/bossTheme.mp3");
+  levelBackground = loadImage("data/levelBackground.jpg");
 }
-*/
+
 function setup() {
   createCanvas(800, 595);
   player = new Player();
@@ -233,23 +239,20 @@ class Powerup {
   }
 
   show() {
-    push();
     textSize(this.size);
     textAlign(CENTER, CENTER);
     noStroke();
-    noFill();
     switch (this.type) {
       case "speed":
-        text("⚡", this.x, this.y);
+        text("⚡", this.x + this.size / 2, this.y + this.size / 2);
         break;
       case "jump":
-        text("🦘", this.x, this.y);
+        text("🦘", this.x + this.size / 2, this.y + this.size / 2);
         break;
       case "invincibility":
-        text("⭐", this.x, this.y);
+        text("⭐", this.x + this.size / 2, this.y + this.size / 2);
         break;
     }
-    pop();
   }
 }
 
@@ -372,7 +375,7 @@ class Player {
     if (this.onGround) {
       this.velocityY = -this.jumpStrength;
       this.onGround = false;
-      //jumpSound.play();
+      jumpSound.play();
     }
   }
 
@@ -440,12 +443,13 @@ class Coin {
   constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.size = 15;
+    this.size = 25;
   }
 
   show() {
-    fill(255, 223, 0);
-    ellipse(this.x, this.y, this.size);
+    textSize(this.size);
+    textAlign(CENTER, CENTER);
+    text("🪙", this.x, this.y);
   }
 }
 
@@ -511,7 +515,7 @@ function draw() {
   if (gameState === "playing" || gameState === "paused") {
     drawHUD();
   }
-
+  /*
   switch (gameState) {
     case "title":
       if (!titleMusic.isPlaying()) {
@@ -555,9 +559,12 @@ function draw() {
       }
       break;
   }
+  */
 }
 
 function playGame() {
+  image(levelBackground, 0, 0, width, height);
+
   player.update();
   player.show();
 
@@ -732,6 +739,7 @@ function playGame() {
         rect(0, 0, width, height);
 
         if (boss.health <= 0) {
+          boss.defeated = true;
           finalTreasure = {
             x: boss.x,
             y: boss.y,
@@ -936,7 +944,7 @@ function mouseClicked() {
 
 function resetGame() {
   gameState = "title";
-  lives = 30;
+  lives = 3;
   score = 0;
   level = 0;
   levels[3].boss.health = 5;
